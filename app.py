@@ -7,58 +7,101 @@ st.set_page_config(page_title="Git Command Simulator", layout="wide", initial_si
 
 # --- セッションステート初期化 ---
 if 'page' not in st.session_state:
-    st.session_state.page = 'landing'  # 'landing' or 'simulator'
+    st.session_state.page = 'landing'
 if 'sim' not in st.session_state:
-    # Simulatorクラス定義後に初期化するため、ここはプレースホルダー
     pass
 
-# --- CSS (デザイン調整) ---
-st.markdown("""
-<style>
-    /* 全体のフォント調整 */
-    .stApp {
-        font-family: "Helvetica Neue", Arial, sans-serif;
-    }
-    /* 説明ページのカード風デザイン */
-    .instruction-card {
-        background-color: #f0f2f6; 
-        padding: 20px; 
-        border-radius: 10px; 
-        border-left: 5px solid #ff4b4b;
-        margin-bottom: 20px;
-    }
-    /* ダークモード対応 */
-    @media (prefers-color-scheme: dark) {
-        .instruction-card {
-            background-color: #262730;
-        }
-    }
-    
-    /* ターミナル出力エリア (シミュレータ用) */
-    .terminal-output {
-        background-color: #0e1117;
-        color: #00ff00;
-        padding: 15px;
-        border-radius: 5px;
-        font-family: 'Courier New', Courier, monospace;
-        white-space: pre-wrap;
-        border: 1px solid #333;
-        margin-bottom: 20px;
-        height: 300px;
-        overflow-y: auto;
-    }
-</style>
-""", unsafe_allow_html=True)
+# --- CSS (ページごとのスタイル切り替え) ---
+def local_css(page_name):
+    if page_name == 'landing':
+        st.markdown("""
+        <style>
+            .stApp {
+                background-color: #ffffff;
+                color: #000000;
+                font-family: "Helvetica Neue", Arial, sans-serif;
+            }
+            @media (prefers-color-scheme: dark) {
+                .stApp {
+                    background-color: #0e1117;
+                    color: #fafafa;
+                }
+            }
+            .instruction-card {
+                background-color: #f0f2f6; 
+                padding: 20px; 
+                border-radius: 10px; 
+                border-left: 5px solid #ff4b4b;
+                margin-bottom: 20px;
+            }
+            @media (prefers-color-scheme: dark) {
+                .instruction-card {
+                    background-color: #262730;
+                }
+            }
+        </style>
+        """, unsafe_allow_html=True)
+    elif page_name == 'simulator':
+        st.markdown("""
+        <style>
+            /* ターミナル風ダークモード強制 */
+            .stApp {
+                background-color: #1e1e1e !important;
+                color: #00ff00 !important;
+                font-family: 'Courier New', Courier, monospace !important;
+            }
+            
+            /* 入力エリア */
+            .stTextArea textarea {
+                background-color: #0d0d0d !important;
+                color: #00ff00 !important;
+                font-family: 'Courier New', Courier, monospace !important;
+                border: 1px solid #333 !important;
+            }
+            
+            /* サイドバー */
+            [data-testid="stSidebar"] {
+                background-color: #252526 !important;
+                color: #cccccc !important;
+            }
+            [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+                color: #ffffff !important;
+            }
+            
+            /* ボタン */
+            .stButton button {
+                background-color: #0e639c !important;
+                color: white !important;
+                border: none !important;
+            }
+            .stButton button:hover {
+                background-color: #1798eb !important;
+            }
+
+            /* ターミナル出力エリア */
+            .terminal-output {
+                background-color: #000000;
+                color: #00ff00;
+                padding: 15px;
+                border-radius: 5px;
+                font-family: 'Courier New', Courier, monospace;
+                white-space: pre-wrap;
+                border: 1px solid #333;
+                margin-bottom: 20px;
+                height: 300px;
+                overflow-y: auto;
+            }
+        </style>
+        """, unsafe_allow_html=True)
 
 # --- ページ遷移関数 ---
 def go_to_simulator():
     st.session_state.page = 'simulator'
-    # st.rerun() はボタンのコールバック内では不要な場合もあるが念のため
 
 def go_to_landing():
     st.session_state.page = 'landing'
 
-# --- Git Simulator Class (変更なし、再利用) ---
+# --- Git Simulator Class ---
 class GitSimulator:
     def __init__(self):
         self.initialized = False
@@ -198,6 +241,9 @@ sim = st.session_state.sim
 #  ページ表示ロジック
 # ==========================================
 
+# ページに応じたCSSを適用
+local_css(st.session_state.page)
+
 if st.session_state.page == 'landing':
     # --- ランディングページ (説明画面) ---
     st.title("Git Command Simulator 🚀")
@@ -224,7 +270,6 @@ if st.session_state.page == 'landing':
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # 中央寄せするためのカラム配置
         if st.button("シミュレーターを起動する (Start)", type="primary", use_container_width=True):
             go_to_simulator()
             st.rerun()
