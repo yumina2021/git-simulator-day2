@@ -3,21 +3,40 @@ import datetime
 import uuid
 
 # --- 設定 ---
-st.set_page_config(page_title="Git Command Simulator", layout="wide")
+st.set_page_config(page_title="Git Command Simulator", layout="wide", initial_sidebar_state="collapsed")
 
-# --- CSSスタイル (ターミナル風) ---
+# --- セッションステート初期化 ---
+if 'page' not in st.session_state:
+    st.session_state.page = 'landing'  # 'landing' or 'simulator'
+if 'sim' not in st.session_state:
+    # Simulatorクラス定義後に初期化するため、ここはプレースホルダー
+    pass
+
+# --- CSS (デザイン調整) ---
 st.markdown("""
 <style>
-    /* 全体の背景とフォント */
+    /* 全体のフォント調整 */
     .stApp {
-        background-color: #1e1e1e;
-        color: #ffffff;
-        font-family: 'Courier New', Courier, monospace;
+        font-family: "Helvetica Neue", Arial, sans-serif;
+    }
+    /* 説明ページのカード風デザイン */
+    .instruction-card {
+        background-color: #f0f2f6; 
+        padding: 20px; 
+        border-radius: 10px; 
+        border-left: 5px solid #ff4b4b;
+        margin-bottom: 20px;
+    }
+    /* ダークモード対応 */
+    @media (prefers-color-scheme: dark) {
+        .instruction-card {
+            background-color: #262730;
+        }
     }
     
-    /* ターミナル出力エリア */
+    /* ターミナル出力エリア (シミュレータ用) */
     .terminal-output {
-        background-color: #000000;
+        background-color: #0e1117;
         color: #00ff00;
         padding: 15px;
         border-radius: 5px;
@@ -28,41 +47,24 @@ st.markdown("""
         height: 300px;
         overflow-y: auto;
     }
-    
-    /* 入力エリア */
-    .stTextArea textarea {
-        background-color: #0d0d0d;
-        color: #00ff00;
-        font-family: 'Courier New', Courier, monospace;
-        border: 1px solid #333;
-    }
-    
-    /* サイドバー */
-    [data-testid="stSidebar"] {
-        background-color: #252526;
-        color: #cccccc;
-    }
-    
-    /* ボタン */
-    .stButton button {
-        background-color: #0e639c;
-        color: white;
-        border: none;
-    }
-    .stButton button:hover {
-        background-color: #1798eb;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- ステート管理 (Gitシミュレーションロジック) ---
+# --- ページ遷移関数 ---
+def go_to_simulator():
+    st.session_state.page = 'simulator'
+    # st.rerun() はボタンのコールバック内では不要な場合もあるが念のため
+
+def go_to_landing():
+    st.session_state.page = 'landing'
+
+# --- Git Simulator Class (変更なし、再利用) ---
 class GitSimulator:
     def __init__(self):
         self.initialized = False
-        self.files = set() # ワーキングディレクトリのファイル
-        self.index = set() # ステージングエリア
-        self.commits = []  # コミット履歴 [{'id': str, 'message': str, 'timestamp': str, 'files': set}]
-        self.history = []  # コミットログ表示用
+        self.files = set() 
+        self.index = set() 
+        self.commits = [] 
         self.terminal_log = ["Welcome to Git Simulator! Type 'git init' to start."]
 
     def log_output(self, command, result):
@@ -74,10 +76,8 @@ class GitSimulator:
         parts = cmd_str.strip().split()
         if not parts:
             return
-
         cmd = parts[0]
         
-        # git init
         if cmd == "git" and len(parts) > 1 and parts[1] == "init":
             self.initialized = True
             self.files = set()
@@ -86,17 +86,14 @@ class GitSimulator:
             self.log_output(cmd_str, "Initialized empty Git repository in /project/.git/")
             return
 
-        # reset (全リセット)
         if cmd == "reset":
             self.__init__()
             return
 
-        # check initialization
         if not self.initialized:
             self.log_output(cmd_str, "fatal: not a git repository (or any of the parent directories): .git")
             return
 
-        # touch filename
         if cmd == "touch":
             if len(parts) < 2:
                 self.log_output(cmd_str, "usage: touch <filename>")
@@ -104,58 +101,37 @@ class GitSimulator:
             filename = parts[1]
             if filename not in self.files:
                 self.files.add(filename)
-                self.log_output(cmd_str, "") # touch usually has no output
+                self.log_output(cmd_str, "") 
             else:
-                self.log_output(cmd_str, "") # update timestamp simulation
+                self.log_output(cmd_str, "") 
             return
 
-        # git commands
         if cmd == "git":
             if len(parts) < 2:
                 self.log_output(cmd_str, "usage: git <command>")
                 return
-            
             subcmd = parts[1]
 
-            # git status
             if subcmd == "status":
                 status_msg = f"On branch main\n"
-                
-                # Changes to be committed (staged)
                 if self.index:
-                    status_msg += "Changes to be committed:\n  (use \"git restore --staged <file>...\" to unstage)\n"
+                    status_msg += "Changes to be committed:\n"
                     for f in self.index:
                         status_msg += f"\tnew file:   {f}\n"
                 
-                # Untracked files
-                untracked = self.files - self.index - {f for c in self.commits for f in c['files']}
-                # シンプル化: コミット済みファイルもfilesに残るが、変更検知は簡易化のため省略
-                # ここでは「ステージされていないファイル」＝「Untracked」として簡易表示
-                # 本来は tracked modified もあるが、シミュレーターなのでシンプルに
-                
-                current_committed = set()
-                if self.commits:
-                    current_committed = self.commits[-1]['files']
-                
-                # Untracked = 存在するが、Indexにも前回のCommitにもない
-                # Modified = 前回のCommitにあるが、Commit時と異なり、かつIndexにない (今回は簡易化のためtouchで作ったものは作成or更新扱い)
-                
                 not_staged = self.files - self.index
-                # 単純化: ステージされていないものはすべて Untracked or Modified 表示
                 if not_staged:
-                    status_msg += "\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n"
+                    status_msg += "\nUntracked files:\n"
                     for f in not_staged:
                          status_msg += f"\t{f}\n"
 
                 if not self.index and not not_staged:
                      status_msg += "nothing to commit, working tree clean"
-                
                 self.log_output(cmd_str, status_msg)
 
-            # git add
             elif subcmd == "add":
                 if len(parts) < 3:
-                     self.log_output(cmd_str, "nothing specified, nothing added.")
+                     self.log_output(cmd_str, "nothing specified")
                      return
                 target = parts[2]
                 if target == ".":
@@ -169,12 +145,10 @@ class GitSimulator:
                         return
                 self.log_output(cmd_str, "")
 
-            # git commit
             elif subcmd == "commit":
                 if "-m" not in parts:
                     self.log_output(cmd_str, "error: command 'commit' requires -m option")
                     return
-                
                 try:
                     m_index = parts.index("-m")
                     message = " ".join(parts[m_index+1:]).strip('"').strip("'")
@@ -186,7 +160,6 @@ class GitSimulator:
                     self.log_output(cmd_str, "nothing to commit, working tree clean")
                     return
 
-                # Commit
                 commit_id = str(uuid.uuid4())[:7]
                 new_commit = {
                     'id': commit_id,
@@ -195,17 +168,10 @@ class GitSimulator:
                     'files': self.index.copy()
                 }
                 self.commits.append(new_commit)
-                # Index is cleared after commit? git keeps tracked files in index roughly, but for adds...
-                # 簡易シミュレータ: コミットしたらステージングは「クリーン」とみなす
-                # ただしファイルは残る
-                # 次回のstatusのために、indexはリセットするが、tracked情報は本来必要
-                # ここでは簡易的に index を空にする (次の変更が必要)
                 staged_count = len(self.index)
                 self.index = set() 
-                
                 self.log_output(cmd_str, f"[{'main'} {commit_id}] {message}\n {staged_count} file(s) changed")
 
-            # git log
             elif subcmd == "log":
                 if "--oneline" in parts:
                     log_str = ""
@@ -217,79 +183,104 @@ class GitSimulator:
                     for c in reversed(self.commits):
                         log_str += f"commit {c['id']}\nDate:   {c['timestamp']}\n\n    {c['message']}\n\n"
                     self.log_output(cmd_str, log_str.strip())
-            
             else:
-                self.log_output(cmd_str, f"git: '{subcmd}' is not a git command. See 'git --help'.")
+                self.log_output(cmd_str, f"git: '{subcmd}' is not a git command.")
         else:
              self.log_output(cmd_str, f"{cmd}: command not found")
 
-# --- セッション初期化 ---
-if 'sim' not in st.session_state:
+# --- Initialize Simulator Instance ---
+if isinstance(st.session_state.get('sim'), dict) or 'sim' not in st.session_state:
     st.session_state.sim = GitSimulator()
-
 sim = st.session_state.sim
 
-# --- UI構築 ---
-st.title("Git Command Simulator")
-st.caption("Gitの基本的なコマンドを練習できるシミュレーターです。")
 
-# 2カラムレイアウト (サイドバー相当をcol1, メインをcol2にするか、st.sidebarを使うか)
-# user request: サイドバーにリポジトリ状態表示
-with st.sidebar:
-    st.header("Repository Status")
+# ==========================================
+#  ページ表示ロジック
+# ==========================================
+
+if st.session_state.page == 'landing':
+    # --- ランディングページ (説明画面) ---
+    st.title("Git Command Simulator 🚀")
     
-    st.subheader("📁 Working Directory")
-    if sim.files:
-        for f in sim.files:
-            st.code(f, language="text")
-    else:
-        st.write("(empty)")
-
-    st.subheader("📋 Staging Area (Index)")
-    if sim.index:
-        for f in sim.index:
-            st.markdown(f"<span style='color:#0f0'>✅ {f}</span>", unsafe_allow_html=True)
-    else:
-        st.write("(empty)")
-
-    st.subheader("📜 Commit History (Latest 5)")
-    if sim.commits:
-        for c in reversed(sim.commits[-5:]):
-            st.text(f"[{c['id']}] {c['message']}")
-    else:
-        st.write("(No commits yet)")
-
-    st.divider()
-    if st.button("Reset Simulator"):
-        sim.run_command("reset")
-        st.rerun()
-
-# メインエリア
-command = st.text_area("Command Input", height=100, placeholder="Example: git init, touch file.txt, git status...")
-
-if st.button("実行 (Run)"):
-    if command:
-        commands = command.split('\n')
-        for cmd in commands:
-            if cmd.strip():
-                sim.run_command(cmd)
-        st.rerun()
-
-# 結果表示
-st.subheader("Terminal Output")
-output_text = "\n".join(sim.terminal_log)
-# 常に最下部を表示するためにJavaScriptを使う方法もあるが、ここでは簡易的にMarkdownで表示
-# コンテナの高さを固定し、スクロールさせるCSSは適用済み
-st.markdown(f'<div class="terminal-output">{output_text}</div>', unsafe_allow_html=True)
-
-# ヒント
-with st.expander("使い方 / Supported Commands"):
     st.markdown("""
-    - `git init`: リポジトリを初期化
-    - `touch <filename>`: ファイルを作成
-    - `git status`: 状態を確認
-    - `git add <file>` OR `git add .`: ステージング
-    - `git commit -m "message"`: コミット
-    - `git log --oneline`: 履歴を表示
-    - `reset`: 最初からやり直す
+    ### ようこそ！
+    ここでは、安全な環境でGitの基本コマンドを練習することができます。
+    実際のファイルを操作することなく、ブラウザ上でGitの動きをシミュレーションします。
     """)
+
+    st.markdown('<div class="instruction-card">', unsafe_allow_html=True)
+    st.markdown("""
+    #### 📚 学べること
+    1. **リポジトリの初期化**: `git init`
+    2. **ファイルの作成**: `touch filename`
+    3. **変更の確認**: `git status`
+    4. **ステージング**: `git add .`
+    5. **コミット**: `git commit -m "message"`
+    6. **履歴の確認**: `git log`
+    """)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.warning("⚠️ 注意: これはシミュレーターです。実際のGitHubには接続されません。")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        # 中央寄せするためのカラム配置
+        if st.button("シミュレーターを起動する (Start)", type="primary", use_container_width=True):
+            go_to_simulator()
+            st.rerun()
+
+elif st.session_state.page == 'simulator':
+    # --- シミュレーターページ ---
+    
+    # Navigation to go back
+    if st.button("← Back to Home"):
+        go_to_landing()
+        st.rerun()
+
+    st.title("Git Terminal")
+    st.caption("コマンドを入力して実行ボタンを押してください。")
+
+    # Layout
+    with st.sidebar:
+        st.header("Repository Status")
+        
+        st.subheader("📁 Working Directory")
+        if sim.files:
+            for f in sim.files:
+                st.code(f, language="text")
+        else:
+            st.write("(empty)")
+
+        st.subheader("📋 Staging Area")
+        if sim.index:
+            for f in sim.index:
+                st.markdown(f"<span style='color:#0f0'>✅ {f}</span>", unsafe_allow_html=True)
+        else:
+            st.write("(empty)")
+
+        st.subheader("📜 Commit History")
+        if sim.commits:
+            for c in reversed(sim.commits[-5:]):
+                st.text(f"[{c['id']}] {c['message']}")
+        else:
+            st.write("(No commits yet)")
+        
+        st.divider()
+        if st.button("Reset All"):
+            sim.run_command("reset")
+            st.rerun()
+
+    # Main Interface
+    command = st.text_area("Command Input ($)", height=85, placeholder="git init...")
+
+    if st.button("実行 (Run Command)", type="primary"):
+        if command:
+            commands = command.split('\n')
+            for cmd in commands:
+                if cmd.strip():
+                     sim.run_command(cmd)
+            st.rerun()
+
+    st.subheader("Terminal Output")
+    output_text = "\n".join(sim.terminal_log)
+    st.markdown(f'<div class="terminal-output">{output_text}</div>', unsafe_allow_html=True)
