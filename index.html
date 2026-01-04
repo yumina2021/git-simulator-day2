@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -8,6 +9,7 @@
     <!-- stlite css -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.63.0/build/stlite.css" />
 </head>
+
 <body>
     <div id="root"></div>
     <!-- stlite js -->
@@ -18,10 +20,11 @@
             entrypoint: "app.py",
             files: {
                 "app.py": {
-                    url: "./app.py", // 同じディレクトリのapp.pyを読み込む
+                    url: "./app.py?v=2", // Update version to force cache refresh
                 },
             },
         }, document.getElementById("root"));
     </script>
 </body>
+
 </html>
